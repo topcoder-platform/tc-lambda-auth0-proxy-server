@@ -1,0 +1,17 @@
+{
+  "name": "m2m-proxy",
+  "version": "1.0.0",
+  "description": "",
+  "main": "lambda.js",
+  "scripts": {
+    "test": "node test.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "lodash": "^4.17.11",
+    "md5": "^2.2.1",
+    "redis": "^2.8.0",
+    "request": "^2.88.0"
+  }
+}

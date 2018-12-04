@@ -1,0 +1,21 @@
+service: m2m-token-storage
+provider:
+  name: aws
+  runtime: nodejs8.10
+  memorySize: 256
+  timeout: 15
+  environment:
+   REDIS_URL: "redis://localhost:6379"
+   DEFAULT_TOKEN_CACHE_TIME: 86400
+
+stage: dev   
+
+functions:
+ handler:
+   handler: lambda.handler
+   events:
+     - http: ANY /
+
+
+
+

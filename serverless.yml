@@ -1,6 +1,7 @@
 service: m2m-token-storage
 provider:
   name: aws
+  stage: ${opt:stage, 'dev'}
   vpc:
    securityGroupIds:
     - ${file(./config/${self:provider.stage}.json):VPC_SECURITY_GROUP_ID_1}
@@ -14,8 +15,6 @@ provider:
   environment:
    REDIS_URL: ${file(./config/${self:provider.stage}.json):REDIS_URL}
    DEFAULT_TOKEN_CACHE_TIME: ${file(./config/${self:provider.stage}.json):DEFAULT_TOKEN_CACHE_TIME}
-
-stage: dev
 
 functions:
  handler:

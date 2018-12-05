@@ -1,4 +1,4 @@
-service: m2m-token-storage
+service: m2m-token-redis-storage
 provider:
   name: aws
   stage: ${opt:stage, 'dev'}
@@ -19,5 +19,7 @@ provider:
 functions:
  handler:
    handler: lambda.handler
+   name: ${self:provider.stage}-M2M-Token-Redis-Storage # optional, Deployed Lambda name
+   description: Auth0 proxy server # The description of your function.
    events:
     - http: ANY /

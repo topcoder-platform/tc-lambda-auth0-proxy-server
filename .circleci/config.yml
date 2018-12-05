@@ -95,7 +95,7 @@ workflows:
               only: 
                 - dev
       # production builds are executed on "master" branch only.
-      - "build-dev":
+      - "build-prod":
           filters:
             branches:
               only:

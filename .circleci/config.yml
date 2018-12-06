@@ -41,8 +41,8 @@ jobs:
       - save_cache: *save_cache
       # deploy app
       - run:
-        name: Deploy via Masterscript v2
-        command: |
+          name: Deploy via Masterscript v2
+          command: |
              git clone --branch master https://github.com/topcoder-platform/tc-deploy-scripts ../buildscript
              cp ./../buildscript/master_deploy.sh .
              ./master_deploy.sh -d LAMBDA -e DEV -s auth0proxy

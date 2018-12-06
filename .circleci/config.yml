@@ -1,60 +1,11 @@
 version: 2
+
 default: &default
-  docker:
-    - image: circleci/node:8.10
-default-steps: &default-steps
-  # Initialization.
-  - checkout
-  # Restoration of node_modules from cache.
-  - restore_cache:
-      key: docker-node-{{ checksum "package-lock.json" }}
-  - run:
-      name: Install Serverless and AWS CLI
-      command: |
-        sudo apt-get update -y && sudo apt-get install -qq -y python-pip libpython-dev
-        curl -O https://bootstrap.pypa.io/get-pip.py && sudo python get-pip.py
-        #installing awscli
-        sudo pip install awscli --upgrade
-        #install serverless
-        sudo npm install -g try-thread-sleep
-        sudo npm install -g serverless --ignore-scripts spawn-sync
-  - run:
-    name: Install node_modules
-    command: |
-      npm install
-  # Caching node modules.
-  - save_cache:
-      key: docker-node-{{ checksum "package-lock.json" }}
-      paths:
-        - node_modules
-
-jobs:
-  # Build & Deploy against development backend rera212
-  "build-dev":
-    <<: *default
-    steps: *default-steps
-      # deploy app
-      - run:
-          name: Deploy via Masterscript v2
-          command: |
-             git clone --branch master https://github.com/topcoder-platform/tc-deploy-scripts ../buildscript
-             cp ./../buildscript/master_deploy.sh .
-             ./master_deploy.sh -d LAMBDA -e DEV -s auth0proxy
-
-  "build-prod":
     docker:
       - image: circleci/node:8.10
-    steps:
-      # Initialization.
-      - checkout
-
-      # Restoration of node_modules from cache.
-      - restore_cache:
-          key: docker-node-{{ checksum "package-lock.json" }}
-
-      - run:
-          name: Install Serverless and AWS CLI
-          command: |
+installation_dependency: &installation_dependency
+        name: Install Serverless and AWS CLI
+        command: |
             sudo apt-get update -y && sudo apt-get install -qq -y python-pip libpython-dev
             curl -O https://bootstrap.pypa.io/get-pip.py && sudo python get-pip.py
             #installing awscli
@@ -62,19 +13,53 @@ jobs:
             #install serverless
             sudo npm install -g try-thread-sleep
             sudo npm install -g serverless --ignore-scripts spawn-sync
-            
-      - run:
+restore_cache: &restore_cache
+          key: docker-node-{{ checksum "package-lock.json" }}
+install_npm: &install_npm
           name: Install node_modules
           command: |
               npm install
-
-      # Caching node modules.
-      - save_cache:
+save_cache: &save_cache
           key: docker-node-{{ checksum "package-lock.json" }}
           paths:
             - node_modules
+    
 
-        # deploy app
+jobs:
+  # Build & Deploy against development backend rera212
+  "build-dev":
+    <<: *default
+      # deploy app
+    steps:
+      # Initialization.
+      - checkout
+      # Restoration of node_modules from cache.
+      - restore_cache: *restore_cache
+      - run: *installation_dependency
+      - run: *install_npm
+      # Caching node modules.
+      - save_cache: *save_cache
+      # deploy app
+      - run:
+        name: Deploy via Masterscript v2
+        command: |
+             git clone --branch master https://github.com/topcoder-platform/tc-deploy-scripts ../buildscript
+             cp ./../buildscript/master_deploy.sh .
+             ./master_deploy.sh -d LAMBDA -e DEV -s auth0proxy
+
+  "build-prod":
+    <<: *default
+      # deploy app
+    steps:
+      # Initialization.
+      - checkout
+      # Restoration of node_modules from cache.
+      - restore_cache: *restore_cache
+      - run: *installation_dependency
+      - run: *install_npm
+      # Caching node modules.
+      - save_cache: *save_cache
+      # deploy app
       - run:
           name: Deploy via Masterscript v2
           command: |

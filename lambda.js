@@ -85,7 +85,6 @@ exports.handler = (event, context, callback) => {
                             let ttl = getTokenExipryTime(token)
                             redisClient.set(cacheKey, token, 'EX', ttl)
                             console.log("Fetched from Auth0 for cache key: ", cacheKey)
-                            successResponse.statusCode = 204
                             successResponse.body = JSON.stringify({
                                 access_token: token.toString(),
                                 expires_in: ttl

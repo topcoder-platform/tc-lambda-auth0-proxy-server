@@ -23,6 +23,7 @@ exports.handler = (event, context, callback) => {
     let redisUrl = process.env.REDIS_URL || 'redis://localhost:6379'
     let auth0Payload = {}
     let cacheKey = ''
+    let clientId = ''
     let options = {}
     let redisClient = null
     let errorResponse = {
@@ -39,6 +40,7 @@ exports.handler = (event, context, callback) => {
         auth0Payload = typeof event['body'] === 'string' ? JSON.parse(event['body']) : event['body']
         // cache key is combination of : clientid-md5(client_secret)
         cacheKey = auth0Payload.client_id || ''
+        clientId = cacheKey
         cacheKey += `-${md5(auth0Payload.client_secret)}` || ' '
         options = {
             url: auth0Payload.auth0_url,
@@ -65,7 +67,7 @@ exports.handler = (event, context, callback) => {
             redisClient.get(cacheKey, function (err, token) {
                 // todo err implementation
                 if (token != null && !freshToken && getTokenExipryTime(token.toString()) > 0) {
-                    console.log("Fetched from Redis Cache for cache key: ", cacheKey)
+                    console.log("Fetched from Redis Cache for cache key: ", clientId)
                     successResponse.body = JSON.stringify({
                         access_token: token.toString(),
                         expires_in: getTokenExipryTime(token.toString())

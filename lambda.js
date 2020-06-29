@@ -11,7 +11,7 @@ const schema = joi.object().keys({
     client_secret: joi.string().required(),
     audience: joi.string().required(),
     auth0_url: joi.string().required(),
-    fresh_token:joi.boolean()
+    fresh_token: joi.boolean()
 })
 
 /**
@@ -49,19 +49,16 @@ exports.handler = (event, context, callback) => {
 
     if (!_.isEmpty(event['body'])) {
         auth0Payload = typeof event['body'] === 'string' ? JSON.parse(event['body']) : event['body']
-        // cache key is combination of : clientid-md5(client_secret)
-        const {value, error} = schema.validate(auth0Payload)
-           //console.log("Error", error, value)
+        // cache key is combination of : clientid
+        const { value, error } = schema.validate(auth0Payload)
         if (error != null) {
-            //console.log("calling error", error.details);
             payloadValidationError = true
             errorResponse.statusCode = 400
-        errorResponse.body = "Payload validation error: " + JSON.stringify(error.details)
+            errorResponse.body = "Payload validation error: " + JSON.stringify(error.details)
         }
-        
-        cacheKey = auth0Payload.client_id || ''
-        clientId = cacheKey
-        cacheKey += `-${md5(auth0Payload.client_secret)}` || ' '
+        clientId = auth0Payload.client_id || ''
+        secret = _.get(auth0Payload, 'client_secret', '')
+        cacheKey = `${clientId}-${md5(secret)}` || ' '
         options = {
             url: auth0Payload.auth0_url,
             headers: { 'content-type': 'application/json' },
@@ -98,23 +95,24 @@ exports.handler = (event, context, callback) => {
                 else {
                     request.post(options, function (error, response, body) {
                         if (error) {
+                            errorResponse.statusCode = response.statusCode
                             errorResponse.body = error
                             callback(null, errorResponse)
                         }
-                        if (body.access_token) {
+                        if (body.access_token && response.statusCode === 200) {
                             let token = body.access_token
                             // Time to live in cache
                             let ttl = getTokenExipryTime(token)
                             redisClient.set(cacheKey, token, 'EX', ttl)
-                            console.log("Fetched from Auth0 for cache key: ", cacheKey)
+                            console.log("Fetched from Auth0 for client-id: ", clientId)
                             successResponse.body = JSON.stringify({
                                 access_token: token.toString(),
                                 expires_in: ttl
                             })
                             callback(null, successResponse)
-                        }
-                        else {
-                            errorResponse.body = new Error('Unknown Error')
+                        } else {
+                            errorResponse.statusCode = response.statusCode
+                            errorResponse.body = JSON.stringify(body)
                             callback(null, errorResponse)
                         }
                         redisClient.quit()

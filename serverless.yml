@@ -9,7 +9,7 @@ provider:
    subnetIds:
     - ${file(./config/${self:provider.stage}.json):VPC_SUBNET_ID_1}
   role: ${file(./config/${self:provider.stage}.json):LAMBDA_ROLE}
-  runtime: nodejs8.10
+  runtime: nodejs12.0
   memorySize: 256
   timeout: 15
   environment:

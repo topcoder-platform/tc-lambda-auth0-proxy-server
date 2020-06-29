@@ -2,7 +2,17 @@ const redis = require('redis'),
     _ = require('lodash'),
     request = require('request'),
     md5 = require('md5'),
-    jwt = require('jsonwebtoken')
+    jwt = require('jsonwebtoken'),
+    joi = require('@hapi/joi')
+
+const schema = joi.object().keys({
+    client_id: joi.string().required(),
+    grant_type: joi.string().required(),
+    client_secret: joi.string().required(),
+    audience: joi.string().required(),
+    auth0_url: joi.string().required(),
+    fresh_token:joi.boolean()
+})
 
 /**
  * 
@@ -35,10 +45,20 @@ exports.handler = (event, context, callback) => {
         body: "Bye!"
     }
     let freshToken = false
+    let payloadValidationError = false
 
     if (!_.isEmpty(event['body'])) {
         auth0Payload = typeof event['body'] === 'string' ? JSON.parse(event['body']) : event['body']
         // cache key is combination of : clientid-md5(client_secret)
+        const {value, error} = schema.validate(auth0Payload)
+           //console.log("Error", error, value)
+        if (error != null) {
+            //console.log("calling error", error.details);
+            payloadValidationError = true
+            errorResponse.statusCode = 400
+        errorResponse.body = "Payload validation error: " + JSON.stringify(error.details)
+        }
+        
         cacheKey = auth0Payload.client_id || ''
         clientId = cacheKey
         cacheKey += `-${md5(auth0Payload.client_secret)}` || ' '
@@ -55,7 +75,7 @@ exports.handler = (event, context, callback) => {
         callback(null, errorResponse)
     }
 
-    if (!_.isEmpty(redisUrl)) {
+    if (!_.isEmpty(redisUrl) && !payloadValidationError) {
         redisClient = redis.createClient(redisUrl)
         redisClient.on("error", function (err) {
             errorResponse.body = "redis client connecting error: " + err
@@ -102,8 +122,10 @@ exports.handler = (event, context, callback) => {
                 }
             })
         })
+    } else if (payloadValidationError) {
+        callback(null, errorResponse)
     } else {
-        errorResponse.body = "Empty redis url."
+        errorResponse.body = "Empty redis url or payload validation error."
         callback(null, errorResponse)
     }
 };

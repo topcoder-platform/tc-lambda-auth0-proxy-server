@@ -47,6 +47,7 @@ exports.handler = (event, context, callback) => {
     let freshToken = false
     let payloadValidationError = false
     let audience = ''
+    let copyAuth0Payload = {}
 
     if (!_.isEmpty(event['body'])) {
         auth0Payload = typeof event['body'] === 'string' ? JSON.parse(event['body']) : event['body']
@@ -60,7 +61,16 @@ exports.handler = (event, context, callback) => {
         clientId = auth0Payload.client_id || ''
         secret = _.get(auth0Payload, 'client_secret', '')
         audience = _.get(auth0Payload, 'audience', '')
-        cacheKey = `${clientId}-${audience}-${md5(secret)}` || ' '
+                   
+        /**
+         * create cache key
+         */
+        Object.assign(copyAuth0Payload, auth0Payload)
+        if (copyAuth0Payload.fresh_token) {
+            delete copyAuth0Payload.fresh_token
+        }
+        cacheKey = `${clientId}-${md5(JSON.stringify(copyAuth0Payload))}`
+ 
         options = {
             url: auth0Payload.auth0_url,
             headers: { 'content-type': 'application/json' },
@@ -86,7 +96,7 @@ exports.handler = (event, context, callback) => {
             redisClient.get(cacheKey, function (err, token) {
                 // todo err implementation
                 if (token != null && !freshToken && getTokenExipryTime(token.toString()) > 0) {
-                    console.log(`Fetched from Redis Cache for cache key:  ${clientId}-${audience}`)
+                    console.log(`Fetched from Redis Cache for cache key:  ${cacheKey}`)
                     successResponse.body = JSON.stringify({
                         access_token: token.toString(),
                         expires_in: getTokenExipryTime(token.toString())
@@ -106,7 +116,7 @@ exports.handler = (event, context, callback) => {
                             // Time to live in cache
                             let ttl = getTokenExipryTime(token)
                             redisClient.set(cacheKey, token, 'EX', ttl)
-                            console.log(`Fetched from Auth0 for client-id: ${clientId}-${audience}`)
+                            console.log(`Fetched from Auth0 for client-id: ${cacheKey}`)
                             successResponse.body = JSON.stringify({
                                 access_token: token.toString(),
                                 expires_in: ttl

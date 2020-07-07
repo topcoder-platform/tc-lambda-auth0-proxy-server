@@ -2,7 +2,17 @@ const redis = require('redis'),
     _ = require('lodash'),
     request = require('request'),
     md5 = require('md5'),
-    jwt = require('jsonwebtoken')
+    jwt = require('jsonwebtoken'),
+    joi = require('@hapi/joi')
+
+const schema = joi.object().keys({
+    client_id: joi.string().required(),
+    grant_type: joi.string().required(),
+    client_secret: joi.string().required(),
+    audience: joi.string().required(),
+    auth0_url: joi.string().required(),
+    fresh_token: joi.boolean()
+})
 
 /**
  * 
@@ -23,6 +33,7 @@ exports.handler = (event, context, callback) => {
     let redisUrl = process.env.REDIS_URL || 'redis://localhost:6379'
     let auth0Payload = {}
     let cacheKey = ''
+    let clientId = ''
     let options = {}
     let redisClient = null
     let errorResponse = {
@@ -34,12 +45,32 @@ exports.handler = (event, context, callback) => {
         body: "Bye!"
     }
     let freshToken = false
+    let payloadValidationError = false
+    let audience = ''
+    let copyAuth0Payload = {}
 
     if (!_.isEmpty(event['body'])) {
         auth0Payload = typeof event['body'] === 'string' ? JSON.parse(event['body']) : event['body']
-        // cache key is combination of : clientid-md5(client_secret)
-        cacheKey = auth0Payload.client_id || ''
-        cacheKey += `-${md5(auth0Payload.client_secret)}` || ' '
+        // cache key is combination of : clientid
+        const { value, error } = schema.validate(auth0Payload)
+        if (error != null) {
+            payloadValidationError = true
+            errorResponse.statusCode = 400
+            errorResponse.body = "Payload validation error: " + JSON.stringify(error.details)
+        }
+        clientId = auth0Payload.client_id || ''
+        secret = _.get(auth0Payload, 'client_secret', '')
+        audience = _.get(auth0Payload, 'audience', '')
+                   
+        /**
+         * create cache key
+         */
+        Object.assign(copyAuth0Payload, auth0Payload)
+        if (copyAuth0Payload.hasOwnProperty('fresh_token')) {
+            delete copyAuth0Payload.fresh_token
+        }
+        cacheKey = `${clientId}-${md5(JSON.stringify(copyAuth0Payload))}`
+ 
         options = {
             url: auth0Payload.auth0_url,
             headers: { 'content-type': 'application/json' },
@@ -53,7 +84,7 @@ exports.handler = (event, context, callback) => {
         callback(null, errorResponse)
     }
 
-    if (!_.isEmpty(redisUrl)) {
+    if (!_.isEmpty(redisUrl) && !payloadValidationError) {
         redisClient = redis.createClient(redisUrl)
         redisClient.on("error", function (err) {
             errorResponse.body = "redis client connecting error: " + err
@@ -65,7 +96,7 @@ exports.handler = (event, context, callback) => {
             redisClient.get(cacheKey, function (err, token) {
                 // todo err implementation
                 if (token != null && !freshToken && getTokenExipryTime(token.toString()) > 0) {
-                    console.log("Fetched from Redis Cache for cache key: ", cacheKey)
+                    console.log(`Fetched from Redis Cache for cache key:  ${cacheKey}`)
                     successResponse.body = JSON.stringify({
                         access_token: token.toString(),
                         expires_in: getTokenExipryTime(token.toString())
@@ -76,23 +107,24 @@ exports.handler = (event, context, callback) => {
                 else {
                     request.post(options, function (error, response, body) {
                         if (error) {
+                            errorResponse.statusCode = response.statusCode
                             errorResponse.body = error
                             callback(null, errorResponse)
                         }
-                        if (body.access_token) {
+                        if (body.access_token && response.statusCode === 200) {
                             let token = body.access_token
                             // Time to live in cache
                             let ttl = getTokenExipryTime(token)
                             redisClient.set(cacheKey, token, 'EX', ttl)
-                            console.log("Fetched from Auth0 for cache key: ", cacheKey)
+                            console.log(`Fetched from Auth0 for client-id: ${cacheKey}`)
                             successResponse.body = JSON.stringify({
                                 access_token: token.toString(),
                                 expires_in: ttl
                             })
                             callback(null, successResponse)
-                        }
-                        else {
-                            errorResponse.body = new Error('Unknown Error')
+                        } else {
+                            errorResponse.statusCode = response.statusCode
+                            errorResponse.body = JSON.stringify(body)
                             callback(null, errorResponse)
                         }
                         redisClient.quit()
@@ -100,8 +132,10 @@ exports.handler = (event, context, callback) => {
                 }
             })
         })
+    } else if (payloadValidationError) {
+        callback(null, errorResponse)
     } else {
-        errorResponse.body = "Empty redis url."
+        errorResponse.body = "Empty redis url or payload validation error."
         callback(null, errorResponse)
     }
 };

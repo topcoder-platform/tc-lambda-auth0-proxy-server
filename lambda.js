@@ -66,7 +66,7 @@ exports.handler = (event, context, callback) => {
          * create cache key
          */
         Object.assign(copyAuth0Payload, auth0Payload)
-        if (copyAuth0Payload.fresh_token) {
+        if (copyAuth0Payload.hasOwnProperty('fresh_token')) {
             delete copyAuth0Payload.fresh_token
         }
         cacheKey = `${clientId}-${md5(JSON.stringify(copyAuth0Payload))}`

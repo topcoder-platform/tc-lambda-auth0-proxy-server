@@ -9,7 +9,8 @@ installation_dependency: &installation_dependency
         sudo apt-get update -y && sudo apt-get install -qq -y python-pip libpython-dev
         curl -O https://bootstrap.pypa.io/get-pip.py && sudo python get-pip.py
         #installing awscli
-        sudo pip install awscli<1.15.0 --upgrade
+        python -version
+        sudo pip install awscli<1.14.0 --upgrade
         #install serverless
         sudo npm install -g try-thread-sleep
         sudo npm install -g serverless --ignore-scripts spawn-sync

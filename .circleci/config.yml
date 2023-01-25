@@ -61,6 +61,14 @@ jobs:
       # deploy app
     steps: *build_steps
 
+  "build-qa":
+    <<: *default
+    environment:
+      DEPLOY_ENV: "QA"
+      LOGICAL_ENV: "qa"
+      GIT_REPO: "tc-lambda-auth0-proxy-server"
+      # deploy app
+    steps: *build_steps
 
   "build-prod":
     <<: *default
@@ -82,6 +90,13 @@ workflows:
             branches:
               only: 
                 - dev
+      # QA builds are executed on "develop" branch only.
+      - "build-qa":
+          context : org-global
+          filters:
+            branches:
+              only: 
+                - qa                
       # production builds are executed on "master" branch only.
       - "build-prod":
           context : org-global

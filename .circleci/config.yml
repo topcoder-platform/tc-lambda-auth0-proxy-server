@@ -2,7 +2,7 @@ version: 2
 
 default: &default
     docker:
-      - image: circleci/node:8.9.4-stretch
+      - image: circleci/node:12.13.1-stretch
 installation_dependency: &installation_dependency
     name: Install Serverless and AWS CLI
     command: |

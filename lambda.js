@@ -61,7 +61,7 @@ exports.handler = (event, context, callback) => {
         clientId = auth0Payload.client_id || ''
         secret = _.get(auth0Payload, 'client_secret', '')
         audience = _.get(auth0Payload, 'audience', '')
-                   
+
         /**
          * create cache key
          */
@@ -70,7 +70,7 @@ exports.handler = (event, context, callback) => {
             delete copyAuth0Payload.fresh_token
         }
         cacheKey = `${clientId}-${md5(JSON.stringify(copyAuth0Payload))}`
- 
+
         options = {
             url: auth0Payload.auth0_url,
             headers: { 'content-type': 'application/json' },
@@ -78,6 +78,7 @@ exports.handler = (event, context, callback) => {
             json: true
         }
         freshToken = JSON.parse(auth0Payload.fresh_token ? auth0Payload.fresh_token : 0)
+            && clientId != 'zYw8u52siLqHu7PmHODYndeIpD4vGe1R'
 
     } else {
         errorResponse.body = "Empty body."

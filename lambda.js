@@ -136,6 +136,7 @@ function getSuccessResponse(response) {
 }
 
 exports.handler = (event, context, callback) => {
+    context.callbackWaitsForEmptyEventLoop = false
     const { error, auth0Payload } = validatePayload(event)
     if (error) {
         callback(null, error)

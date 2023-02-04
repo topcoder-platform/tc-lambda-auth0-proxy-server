@@ -87,10 +87,10 @@ function getFromRedisCache(auth0Payload, cacheKey, callback) {
             console.log(err)
             callAuth0(auth0Payload, cacheKey, callback)
         } else {
-            const ttl = getTokenExpiryTime(token.toString())
+            const ttl = getTokenExpiryTime(token)
             if (ttl > 0) {
                 console.log(`Fetched from Redis Cache for cache key:  ${cacheKey}`)
-                callback(null, getSuccessResponse({ body: JSON.stringify({ access_token: token.toString(), expires_in: ttl }) }))
+                callback(null, getSuccessResponse({ body: JSON.stringify({ access_token: token, expires_in: ttl }) }))
             } else {
                 callAuth0(auth0Payload, cacheKey, callback)
             }

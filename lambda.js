@@ -5,6 +5,8 @@ const redis = require('redis'),
     jwt = require('jsonwebtoken'),
     joi = require('@hapi/joi')
 
+const ignoredClients = ['zYw8u52siLqHu7PmHODYndeIpD4vGe1R']
+
 function validatePayload(event) {
     if (_.isEmpty(event['body'])) {
         return { error: getErrorResponse({ body: "Empty body." }) }
@@ -30,10 +32,12 @@ let redisClient = null
 
 function acquireRedisClient() {
     if (redisClient == null) {
+        console.log("Creating new redis client")
         redisClient = createRedisClient()
     } else {
         const pong = redisClient.ping()
         if (!pong) {
+            console.log("Redis connection lost, creating new redis client")
             redisClient = createRedisClient()
         }
     }
@@ -49,8 +53,11 @@ function createRedisClient() {
 }
 
 function getCacheKey(auth0Payload) {
-    const copyAuth0Payload = _.assign({}, auth0Payload)
-    delete copyAuth0Payload.fresh_token
+    const copyAuth0Payload = {
+        "client_id": auth0Payload.client_id,
+        "audience": auth0Payload.audience,
+        "client_secret": auth0Payload.client_secret,
+    }
     return `${auth0Payload.client_id}-${md5(JSON.stringify(copyAuth0Payload))}`
 }
 
@@ -68,7 +75,9 @@ function callAuth0(auth0Payload, cacheKey, callback) {
     }
     request.post(options, function (error, response, body) {
         if (error) {
-            callback(null, getErrorResponse({ statusCode: response.statusCode, body: error }))
+            const errorResponse = getErrorResponse({ statusCode: response.statusCode, body: error })
+            console.log(errorResponse)
+            callback(null, errorResponse)
         }
         if (body.access_token && response.statusCode === 200) {
             console.log(`Fetched from Auth0 for client-id: ${cacheKey}`)
@@ -76,7 +85,9 @@ function callAuth0(auth0Payload, cacheKey, callback) {
             const ttl = saveToRedisCache(cacheKey, token)
             callback(null, getSuccessResponse({ body: JSON.stringify({ access_token: token, expires_in: ttl }) }))
         } else {
-            callback(null, getErrorResponse({ statusCode: response.statusCode, body: JSON.stringify(body) }))
+            const errorResponse = getErrorResponse({ statusCode: response.statusCode, body: JSON.stringify(body) })
+            console.log(errorResponse)
+            callback(null, errorResponse)
         }
     })
 }
@@ -92,6 +103,7 @@ function getFromRedisCache(auth0Payload, cacheKey, callback) {
                 console.log(`Fetched from Redis Cache for cache key:  ${cacheKey}`)
                 callback(null, getSuccessResponse({ body: JSON.stringify({ access_token: token, expires_in: ttl }) }))
             } else {
+                console.log("Token expired in cache")
                 callAuth0(auth0Payload, cacheKey, callback)
             }
         }
@@ -144,8 +156,9 @@ exports.handler = (event, context, callback) => {
         acquireRedisClient()
         const cacheKey = getCacheKey(auth0Payload)
         const freshToken = JSON.parse(auth0Payload.fresh_token ? auth0Payload.fresh_token : 0)
-            && auth0Payload.clientId != 'zYw8u52siLqHu7PmHODYndeIpD4vGe1R'
+            && !_.includes(ignoredClients, auth0Payload.clientId)
         if (freshToken) {
+            console.log("Requested fresh token")
             callAuth0(auth0Payload, cacheKey, callback)
         } else {
             getFromRedisCache(auth0Payload, cacheKey, callback)

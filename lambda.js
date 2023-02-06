@@ -157,7 +157,7 @@ exports.handler = (event, context, callback) => {
         const cacheKey = getCacheKey(auth0Payload)
         console.log(`Request for ${cacheKey}`)
         const freshToken = JSON.parse(auth0Payload.fresh_token ? auth0Payload.fresh_token : 0)
-            && !_.includes(ignoredClients, auth0Payload.clientId)
+            && !_.includes(ignoredClients, auth0Payload.client_id)
         if (freshToken) {
             console.log("Requested fresh token")
             callAuth0(auth0Payload, cacheKey, callback)

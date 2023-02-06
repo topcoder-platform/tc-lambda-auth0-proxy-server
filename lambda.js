@@ -155,6 +155,7 @@ exports.handler = (event, context, callback) => {
     } else {
         acquireRedisClient()
         const cacheKey = getCacheKey(auth0Payload)
+        console.log(`Request for ${cacheKey}`)
         const freshToken = JSON.parse(auth0Payload.fresh_token ? auth0Payload.fresh_token : 0)
             && !_.includes(ignoredClients, auth0Payload.clientId)
         if (freshToken) {

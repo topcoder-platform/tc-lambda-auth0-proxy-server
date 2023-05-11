@@ -2,7 +2,7 @@ version: 2
 
 default: &default
     docker:
-      - image: circleci/node:12.13.1-stretch
+      - image: cimg/node:18.16.0-browsers
 installation_dependency: &installation_dependency
     name: Install Serverless and AWS CLI
     command: |
@@ -16,7 +16,7 @@ installation_dependency: &installation_dependency
 install_deploysuite: &install_deploysuite
     name: Installation of install_deploysuite.
     command: |
-       git clone --branch master https://github.com/topcoder-platform/tc-deploy-scripts ../buildscript
+       git clone --branch v1.4.15 https://github.com/topcoder-platform/tc-deploy-scripts ../buildscript
        cp ./../buildscript/master_deploy.sh .
        cp ./../buildscript/buildenv.sh .
        cp ./../buildscript/awsconfiguration.sh .

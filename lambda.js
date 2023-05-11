@@ -72,17 +72,22 @@ function callAuth0(auth0Payload, cacheKey, callback) {
     const options = {
         url: auth0Payload.auth0_url,
         headers: { 'content-type': auth0Payload.content_type },
-        body: {
-            grant_type: auth0Payload.grant_type,
-            client_id: auth0Payload.client_id,
-            client_secret: auth0Payload.client_secret
-        },
         json: auth0Payload.content_type === 'application/json'
     }
+    const data = {
+        grant_type: auth0Payload.grant_type,
+        client_id: auth0Payload.client_id,
+        client_secret: auth0Payload.client_secret
+    }
     if (!_.isUndefined(auth0Payload.audience)) {
-        options.body.audience = auth0Payload.audience
+        data.audience = auth0Payload.audience
     } else if (!_.isUndefined(auth0Payload.scope)) {
-        options.body.scope = auth0Payload.scope
+        data.scope = auth0Payload.scope
+    }
+    if (options.json) {
+        options.body = data
+    } else {
+        options.form = data
     }
     request.post(options, function (error, response, body) {
         if (error) {
@@ -90,13 +95,24 @@ function callAuth0(auth0Payload, cacheKey, callback) {
             console.log(errorResponse)
             callback(null, errorResponse)
         }
-        if (body.access_token && response.statusCode === 200) {
-            console.log(`Fetched from Auth0 for client-id: ${cacheKey}`)
-            const token = body.access_token
-            const ttl = saveToRedisCache(cacheKey, token)
-            callback(null, getSuccessResponse({ body: JSON.stringify({ access_token: token, expires_in: ttl }) }))
+        if (response.statusCode === 200) {
+            let token
+            if (_.isString(body)) {
+                token = JSON.parse(body).access_token
+            } else {
+                token = body.access_token
+            }
+            if (token) {
+                console.log(`Fetched from Auth0 for client-id: ${cacheKey}`)
+                const ttl = saveToRedisCache(cacheKey, token)
+                callback(null, getSuccessResponse({ body: JSON.stringify({ access_token: token, expires_in: ttl }) }))
+            } else {
+                const errorResponse = getErrorResponse({ statusCode: response.statusCode, body: _.isString(body) ? body : JSON.stringify(body) })
+                console.log(errorResponse)
+                callback(null, errorResponse)
+            }
         } else {
-            const errorResponse = getErrorResponse({ statusCode: response.statusCode, body: JSON.stringify(body) })
+            const errorResponse = getErrorResponse({ statusCode: response.statusCode, body: _.isString(body) ? body : JSON.stringify(body) })
             console.log(errorResponse)
             callback(null, errorResponse)
         }

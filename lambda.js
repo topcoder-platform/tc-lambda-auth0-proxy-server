@@ -1,9 +1,9 @@
-const redis = require('redis'),
-    _ = require('lodash'),
-    request = require('request'),
-    md5 = require('md5'),
-    jwt = require('jsonwebtoken'),
-    joi = require('@hapi/joi')
+const redis = require('redis')
+const _ = require('lodash')
+const request = require('request')
+const md5 = require('md5')
+const jwt = require('jsonwebtoken')
+const joi = require('joi')
 
 const ignoredClients = ['zYw8u52siLqHu7PmHODYndeIpD4vGe1R']
 
@@ -23,10 +23,13 @@ const schema = joi.object().keys({
     client_id: joi.string().required(),
     grant_type: joi.string().required(),
     client_secret: joi.string().required(),
-    audience: joi.string().required(),
+    audience: joi.string().optional(),
+    scope: joi.string().optional(),
     auth0_url: joi.string().required(),
-    fresh_token: joi.boolean()
-})
+    fresh_token: joi.boolean(),
+    provider: joi.string().default('auth0'),
+    content_type: joi.string().valid('application/json', 'application/x-www-form-urlencoded').default('application/json')
+}).xor('audience', 'scope')
 
 let redisClient = null
 
@@ -55,23 +58,31 @@ function createRedisClient() {
 function getCacheKey(auth0Payload) {
     const copyAuth0Payload = {
         "client_id": auth0Payload.client_id,
-        "audience": auth0Payload.audience,
         "client_secret": auth0Payload.client_secret,
     }
-    return `${auth0Payload.client_id}-${md5(JSON.stringify(copyAuth0Payload))}`
+    if (!_.isUndefined(auth0Payload.audience)) {
+        copyAuth0Payload.audience = auth0Payload.audience
+    } else if (!_.isUndefined(auth0Payload.scope)) {
+        copyAuth0Payload.scope = auth0Payload.scope
+    }
+    return `${auth0Payload.provider}-${auth0Payload.client_id}-${md5(JSON.stringify(copyAuth0Payload))}`
 }
 
 function callAuth0(auth0Payload, cacheKey, callback) {
     const options = {
         url: auth0Payload.auth0_url,
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': auth0Payload.content_type },
         body: {
             grant_type: auth0Payload.grant_type,
             client_id: auth0Payload.client_id,
-            client_secret: auth0Payload.client_secret,
-            audience: auth0Payload.audience
+            client_secret: auth0Payload.client_secret
         },
-        json: true
+        json: auth0Payload.content_type === 'application/json'
+    }
+    if (!_.isUndefined(auth0Payload.audience)) {
+        options.body.audience = auth0Payload.audience
+    } else if (!_.isUndefined(auth0Payload.scope)) {
+        options.body.scope = auth0Payload.scope
     }
     request.post(options, function (error, response, body) {
         if (error) {

@@ -16,7 +16,7 @@ function validatePayload(event) {
     if (error != null) {
         return { error: getErrorResponse({ statusCode: 400, body: "Payload validation error: " + JSON.stringify(error.details) }) }
     }
-    return { auth0Payload }
+    return { auth0Payload: value }
 }
 
 const schema = joi.object().keys({

@@ -1,9 +1,9 @@
-const redis = require('redis'),
-    _ = require('lodash'),
-    request = require('request'),
-    md5 = require('md5'),
-    jwt = require('jsonwebtoken'),
-    joi = require('@hapi/joi')
+const redis = require('redis')
+const _ = require('lodash')
+const request = require('request')
+const md5 = require('md5')
+const jwt = require('jsonwebtoken')
+const joi = require('joi')
 
 const ignoredClients = ['zYw8u52siLqHu7PmHODYndeIpD4vGe1R']
 
@@ -16,17 +16,20 @@ function validatePayload(event) {
     if (error != null) {
         return { error: getErrorResponse({ statusCode: 400, body: "Payload validation error: " + JSON.stringify(error.details) }) }
     }
-    return { auth0Payload }
+    return { auth0Payload: value }
 }
 
 const schema = joi.object().keys({
     client_id: joi.string().required(),
     grant_type: joi.string().required(),
     client_secret: joi.string().required(),
-    audience: joi.string().required(),
+    audience: joi.string().optional(),
+    scope: joi.string().optional(),
     auth0_url: joi.string().required(),
-    fresh_token: joi.boolean()
-})
+    fresh_token: joi.boolean(),
+    provider: joi.string().default('auth0'),
+    content_type: joi.string().valid('application/json', 'application/x-www-form-urlencoded').default('application/json')
+}).xor('audience', 'scope')
 
 let redisClient = null
 
@@ -55,23 +58,36 @@ function createRedisClient() {
 function getCacheKey(auth0Payload) {
     const copyAuth0Payload = {
         "client_id": auth0Payload.client_id,
-        "audience": auth0Payload.audience,
         "client_secret": auth0Payload.client_secret,
     }
-    return `${auth0Payload.client_id}-${md5(JSON.stringify(copyAuth0Payload))}`
+    if (!_.isUndefined(auth0Payload.audience)) {
+        copyAuth0Payload.audience = auth0Payload.audience
+    } else if (!_.isUndefined(auth0Payload.scope)) {
+        copyAuth0Payload.scope = auth0Payload.scope
+    }
+    return `${auth0Payload.provider}-${auth0Payload.client_id}-${md5(JSON.stringify(copyAuth0Payload))}`
 }
 
 function callAuth0(auth0Payload, cacheKey, callback) {
     const options = {
         url: auth0Payload.auth0_url,
-        headers: { 'content-type': 'application/json' },
-        body: {
-            grant_type: auth0Payload.grant_type,
-            client_id: auth0Payload.client_id,
-            client_secret: auth0Payload.client_secret,
-            audience: auth0Payload.audience
-        },
-        json: true
+        headers: { 'content-type': auth0Payload.content_type },
+        json: auth0Payload.content_type === 'application/json'
+    }
+    const data = {
+        grant_type: auth0Payload.grant_type,
+        client_id: auth0Payload.client_id,
+        client_secret: auth0Payload.client_secret
+    }
+    if (!_.isUndefined(auth0Payload.audience)) {
+        data.audience = auth0Payload.audience
+    } else if (!_.isUndefined(auth0Payload.scope)) {
+        data.scope = auth0Payload.scope
+    }
+    if (options.json) {
+        options.body = data
+    } else {
+        options.form = data
     }
     request.post(options, function (error, response, body) {
         if (error) {
@@ -79,13 +95,24 @@ function callAuth0(auth0Payload, cacheKey, callback) {
             console.log(errorResponse)
             callback(null, errorResponse)
         }
-        if (body.access_token && response.statusCode === 200) {
-            console.log(`Fetched from Auth0 for client-id: ${cacheKey}`)
-            const token = body.access_token
-            const ttl = saveToRedisCache(cacheKey, token)
-            callback(null, getSuccessResponse({ body: JSON.stringify({ access_token: token, expires_in: ttl }) }))
+        if (response.statusCode === 200) {
+            let token
+            if (_.isString(body)) {
+                token = JSON.parse(body).access_token
+            } else {
+                token = body.access_token
+            }
+            if (token) {
+                console.log(`Fetched from Auth0 for client-id: ${cacheKey}`)
+                const ttl = saveToRedisCache(cacheKey, token)
+                callback(null, getSuccessResponse({ body: JSON.stringify({ access_token: token, expires_in: ttl }) }))
+            } else {
+                const errorResponse = getErrorResponse({ statusCode: response.statusCode, body: _.isString(body) ? body : JSON.stringify(body) })
+                console.log(errorResponse)
+                callback(null, errorResponse)
+            }
         } else {
-            const errorResponse = getErrorResponse({ statusCode: response.statusCode, body: JSON.stringify(body) })
+            const errorResponse = getErrorResponse({ statusCode: response.statusCode, body: _.isString(body) ? body : JSON.stringify(body) })
             console.log(errorResponse)
             callback(null, errorResponse)
         }

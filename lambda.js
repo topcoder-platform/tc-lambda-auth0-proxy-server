@@ -28,8 +28,9 @@ const schema = joi.object().keys({
     auth0_url: joi.string().required(),
     fresh_token: joi.boolean(),
     provider: joi.string().default('auth0'),
-    content_type: joi.string().valid('application/json', 'application/x-www-form-urlencoded').default('application/json')
-}).xor('audience', 'scope')
+    content_type: joi.string().valid('application/json', 'application/x-www-form-urlencoded').default('application/json'),
+    expires_in: joi.number().min(1).optional()
+}).oxor('audience', 'scope')
 
 let redisClient = null
 
@@ -104,7 +105,7 @@ function callAuth0(auth0Payload, cacheKey, callback) {
             }
             if (token) {
                 console.log(`Fetched from Auth0 for client-id: ${cacheKey}`)
-                const ttl = saveToRedisCache(cacheKey, token)
+                const ttl = saveToRedisCache(cacheKey, token, auth0Payload.expires_in)
                 callback(null, getSuccessResponse({ body: JSON.stringify({ access_token: token, expires_in: ttl }) }))
             } else {
                 const errorResponse = getErrorResponse({ statusCode: response.statusCode, body: _.isString(body) ? body : JSON.stringify(body) })
@@ -137,8 +138,8 @@ function getFromRedisCache(auth0Payload, cacheKey, callback) {
     })
 }
 
-function saveToRedisCache(cacheKey, token) {
-    const ttl = getTokenExpiryTime(token)
+function saveToRedisCache(cacheKey, token, defaultExpiry) {
+    const ttl = getTokenExpiryTime(token, defaultExpiry)
     redisClient.set(cacheKey, token, 'EX', ttl)
     return ttl
 }
@@ -148,11 +149,14 @@ function saveToRedisCache(cacheKey, token) {
  * @param String token
  * @returns expiryTime in seconds 
  */
-function getTokenExpiryTime(token) {
+function getTokenExpiryTime(token, defaultExpiry = 1) {
     if (!token) {
         return 0
     } else {
         const decodedToken = jwt.decode(token)
+        if (decodedToken == null) {
+            return defaultExpiry
+        }
         const expiryTimeInMilliSeconds = (decodedToken.exp - 60) * 1000 - (new Date().getTime())
         return Math.floor(expiryTimeInMilliSeconds / 1000)
     }
